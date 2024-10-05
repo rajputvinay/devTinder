@@ -1,8 +1,54 @@
 const express = require("express")
 const connectDB = require("./config/database")
 const User = require("./models/user")
+const { validateSignupData } = require("./utils/validation")
+const brcypt = require("bcrypt")
 const app = express()//creating new express js application
 app.use(express.json())
+
+app.post("/signup", async (req, res) => {
+    try {
+        validateSignupData(req)
+        const { firstName, lastName, emailId, password, ...rest } = req.body;
+        const passwordHash = await brcypt.hash(password, 10);
+        console.log(passwordHash);
+        const user = new User({
+            firstName,
+            lastName,
+            emailId,
+            password: passwordHash,
+            ...rest
+        })
+        await user.save()
+        res.send("Signup Successfully")
+    }
+    catch (err) {
+        res.status(400).send("Error:" + err.message)
+    }
+})
+
+app.post("/login", async (req, res) => {
+    try {
+
+        const { emailId, password } = req.body;
+
+        const user = await User.findOne({ emailId });
+        if (!user) {
+            throw new Error("Login Credentials is not valid :Email")
+        }
+        const isPasswordValid = await brcypt.compare(password, user.password);
+        if (isPasswordValid) {
+            res.send("Login Successfully!!")
+        }
+        else {
+            throw new Error("Login Credentials is not valid:password")
+        }
+    }
+    catch (err) {
+        res.status(400).send("ERROR : " + err.message)
+    }
+})
+
 
 app.delete("/user/:id", async (req, res) => {
     const userId = req.params.id;
@@ -52,27 +98,25 @@ app.patch("/user/:id", async (req, res) => {
     const userId = req.params.id;
     const data = req.body;
     try {
-        const user = await User.findByIdAndUpdate( userId, data, {
-            returnDocument: "after"
+        const allowed_updates = ["fristName", "lastName", "age", "skills", "gender", "about", "photoUrl"]
+        const isUpdateAllow = Object.keys(data).every(key => allowed_updates.includes(key))
+        if (!isUpdateAllow)
+            throw new Error("Update not allowed")
+        if (data?.skills?.length > 10)
+            throw new Error("Skill should be less than 10 or 10")
+
+        const user = await User.findByIdAndUpdate(userId, data, {
+            returnDocument: "after",
+            runValidators: true
         })
         res.send({ status: 200, message: "User Updated Successfully!!", data: [user] })
     }
     catch (err) {
-        res.status(400).send("Something went Wrong")
+        res.status(400).send("Error:  " + err.message)
     }
 })
 
-app.post("/signup", async (req, res) => {
-    const user = new User(req.body)
-    try {
 
-        await user.save();
-        res.send("Saved!!")
-    }
-    catch (err) {
-        res.status(400).send("Error Saving the error" + err.message)
-    }
-})
 
 connectDB()
     .then(() => {
@@ -84,5 +128,4 @@ connectDB()
     .catch((err) => {
         console.error("Database can not be connected!!", err);
     });
-
 
