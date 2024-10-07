@@ -4,8 +4,11 @@ const User = require("./models/user")
 const { validateSignupData } = require("./utils/validation")
 const brcypt = require("bcrypt")
 const app = express()//creating new express js application
+const cookieParser = require("cookie-parser")
+const jwt = require("jsonwebtoken")
+const { userAuth } = require("./middlewares/auth")
 app.use(express.json())
-
+app.use(cookieParser())
 app.post("/signup", async (req, res) => {
     try {
         validateSignupData(req)
@@ -38,6 +41,8 @@ app.post("/login", async (req, res) => {
         }
         const isPasswordValid = await brcypt.compare(password, user.password);
         if (isPasswordValid) {
+            const token = jwt.sign({ _id: user._id }, "DEV@TINDER$2003", { expiresIn: "0d" });
+            res.cookie("Token", token)
             res.send("Login Successfully!!")
         }
         else {
@@ -49,6 +54,17 @@ app.post("/login", async (req, res) => {
     }
 })
 
+app.get("/profile", userAuth, async (req, res) => {
+    try {
+
+        const user = req.user
+        res.send(user)
+
+    }
+    catch (err) {
+        res.status(400).send("Error : " + err.message)
+    }
+})
 
 app.delete("/user/:id", async (req, res) => {
     const userId = req.params.id;
